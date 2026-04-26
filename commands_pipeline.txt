@@ -1,0 +1,18 @@
+# Basic (template answer)
+python3 pipeline.py \
+    --ckpt model_final.ckpt \
+    --video /video/video.mp4 \
+    --query "What is the person doing?"
+
+# With LLM answer
+python3 pipeline.py \
+    --ckpt model_final.ckpt \
+    --video video/video.mp4 \
+    --query "What do they eat?" \
+    --openai 
+
+
+# Interactive
+python3 pipeline.py \
+    --ckpt model_final.ckpt \
+    --interactive

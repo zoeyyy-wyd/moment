@@ -57,6 +57,25 @@ class CLIPExtractor:
         print("[CLIP] Model loaded: ViT-B/32")
 
     @torch.no_grad()
+    def extract_text_features(self, query):
+        """
+        Encode a text query with CLIP.
+
+        Args:
+            query: text string
+
+        Returns:
+            features: np.ndarray [1, 512], L2 normalized
+        """
+        import clip
+        tokens = clip.tokenize([query], truncate=True).to(self.device)
+        feat = self.model.encode_text(tokens)
+        feat = feat.cpu().numpy().astype(np.float32)
+        norms = np.linalg.norm(feat, axis=1, keepdims=True)
+        feat = feat / np.maximum(norms, 1e-8)
+        return feat
+
+    @torch.no_grad()
     def extract(self, video_path, clip_length=2):
         """
         Extract CLIP features from a video.

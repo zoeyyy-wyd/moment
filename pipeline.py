@@ -137,7 +137,7 @@ def retrieve_moments(model, video_feat, text_feat, clip_length=2, device="cuda",
 
 def load_moment_detr(ckpt_path, device="cuda"):
     """Load trained Moment-DETR from checkpoint."""
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
     opt = checkpoint["opt"]
     opt.device = torch.device(device)
 
