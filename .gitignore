@@ -11,6 +11,9 @@ tmp*.py
 *pickle
 credentials
 features/
+video/
+newversion/
+commands_pipeline.txt
 
 # compiled files #
 *.pyc

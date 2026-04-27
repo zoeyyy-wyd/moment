@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VideoQA - Moment-DETR + LLM</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface-hover: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #6c6cf0;
+    --text: #e8e8f0;
+    --text-muted: #7a7a8e;
+    --text-dim: #4a4a5e;
+    --success: #4ade80;
+    --warning: #fbbf24;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .header h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+
+  .header span {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* Video area */
+  .video-area {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .video-area video {
+    width: 100%;
+    display: block;
+    max-height: 480px;
+    background: #000;
+  }
+
+  .upload-zone {
+    height: 260px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .upload-zone:hover { background: var(--surface-hover); }
+  .upload-zone .icon { color: var(--text-dim); }
+  .upload-zone .label { font-size: 15px; color: var(--text-muted); }
+  .upload-zone .hint { font-size: 12px; color: var(--text-dim); }
+
+  /* Query input */
+  .query-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .query-input {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 0 16px;
+    transition: border-color 0.2s;
+  }
+
+  .query-input:focus-within { border-color: var(--accent); }
+
+  .query-input input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 15px;
+    padding: 14px 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .query-input input::placeholder { color: var(--text-dim); }
+
+  .btn-ask {
+    padding: 0 28px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+  }
+
+  .btn-ask:disabled {
+    background: var(--border);
+    cursor: not-allowed;
+  }
+
+  .btn-ask:not(:disabled):hover { filter: brightness(1.15); }
+
+  /* Settings row */
+  .settings-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .settings-row input[type="text"] {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+  }
+
+  .settings-row input::placeholder { color: var(--text-dim); }
+  .settings-row label {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Error */
+  .error {
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    font-size: 14px;
+  }
+
+  /* Loading */
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px;
+  }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { font-size: 14px; color: var(--text-muted); }
+
+  /* Answer */
+  .answer-card {
+    padding: 24px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .answer-text {
+    font-size: 15px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    height: 28px;
+    background: #1e1e2a;
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 8px 16px 14px;
+    border: 1px solid var(--border);
+  }
+
+  .timeline-bar {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    border-radius: 4px;
+    transition: opacity 0.3s;
+  }
+
+  /* Moments list */
+  .moments-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .moment-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 6px;
+  }
+
+  .moment-card:hover {
+    background: var(--surface-hover);
+  }
+
+  .moment-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .moment-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    flex: 1;
+  }
+
+  .moment-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .footer {
+    text-align: center;
+    padding: 24px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  #results { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>VideoQA</h1>
+  <span>Moment-DETR + LLM</span>
+</div>
+
+<!-- Main -->
+<div class="container">
+
+  <!-- Video area -->
+  <div class="video-area">
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <svg class="icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M10 9l4 3-4 3V9z" fill="currentColor"/>
+      </svg>
+      <div class="label">Drop a video here or click to upload</div>
+      <div class="hint">MP4, AVI, MKV, MOV</div>
+    </div>
+    <div id="playerArea" style="display:none;">
+      <div style="position:relative;">
+        <video id="videoPlayer" controls></video>
+        <button id="btnRemoveVideo" onclick="removeVideo()" style="
+          position:absolute; top:10px; right:10px;
+          width:32px; height:32px; border-radius:50%;
+          background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2);
+          color:#fff; font-size:16px; cursor:pointer;
+          display:flex; align-items:center; justify-content:center;
+          transition: background 0.2s;
+        " title="Remove video">✕</button>
+      </div>
+      <div class="timeline" id="timeline" style="display:none;"></div>
+    </div>
+    <input type="file" id="fileInput" accept="video/*" style="display:none">
+  </div>
+
+  <!-- Server URL + API key -->
+  <div class="settings-row">
+    <label>Server:</label>
+    <input type="text" id="serverUrl" placeholder="http://localhost:8000" value="http://localhost:8000">
+    <label>API Key:</label>
+    <input type="text" id="apiKey" placeholder="OpenAI key (optional)">
+  </div>
+
+  <!-- Query input -->
+  <div class="query-row">
+    <div class="query-input">
+      <input type="text" id="queryInput" placeholder="Ask a question about the video...">
+    </div>
+    <button class="btn-ask" id="btnAsk" onclick="submitQuery()">Ask</button>
+  </div>
+
+  <!-- Error -->
+  <div class="error" id="errorBox" style="display:none;"></div>
+
+  <!-- Loading -->
+  <div class="loading" id="loadingBox" style="display:none;">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Processing...</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="answer-card">
+      <div class="section-label">Answer</div>
+      <div class="answer-text" id="answerText"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <div class="moments-label" id="momentsLabel"></div>
+      <div id="momentsList"></div>
+    </div>
+  </div>
+
+  <div class="footer">Powered by Moment-DETR · CLIP · SlowFast · GPT-4o</div>
+</div>
+
+<script>
+const MOMENT_COLORS = ['#6c6cf0', '#f06c9b', '#6cf0c8', '#f0c86c', '#c86cf0'];
+
+let videoFile = null;
+let videoDuration = 0;
+
+// ---- File handling ----
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) loadVideo(file);
+});
+
+// Drag & drop
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.background = '#1a1a24'; });
+uploadZone.addEventListener('dragleave', () => { uploadZone.style.background = ''; });
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.style.background = '';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('video/')) loadVideo(file);
+});
+
+function loadVideo(file) {
+  videoFile = file;
+  const url = URL.createObjectURL(file);
+  const player = document.getElementById('videoPlayer');
+  player.src = url;
+  player.onloadedmetadata = () => { videoDuration = player.duration; };
+
+  document.getElementById('uploadZone').style.display = 'none';
+  document.getElementById('playerArea').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('timeline').style.display = 'none';
+}
+
+function removeVideo() {
+  const player = document.getElementById('videoPlayer');
+  player.pause();
+  player.src = '';
+  videoFile = null;
+  videoDuration = 0;
+
+  document.getElementById('playerArea').style.display = 'none';
+  document.getElementById('uploadZone').style.display = 'flex';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('timeline').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+// ---- Enter key ----
+document.getElementById('queryInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitQuery();
+});
+
+// ---- Submit ----
+async function submitQuery() {
+  const query = document.getElementById('queryInput').value.trim();
+  if (!query) return;
+  if (!videoFile) {
+    showError('Please upload a video first');
+    return;
+  }
+
+  const serverUrl = document.getElementById('serverUrl').value.trim() || 'http://localhost:8000';
+  const apiKey = document.getElementById('apiKey').value.trim();
+
+  showLoading('Uploading video and processing...');
+  hideError();
+  document.getElementById('results').style.display = 'none';
+
+  try {
+    const formData = new FormData();
+    formData.append('video', videoFile);
+    formData.append('query', query);
+    if (apiKey) formData.append('openai_key', apiKey);
+
+    const res = await fetch(serverUrl + '/query', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Server error: ' + res.status);
+    }
+
+    const data = await res.json();
+    showResults(data);
+  } catch (err) {
+    showError(err.message || 'Failed to connect to server. Make sure server.py is running.');
+  } finally {
+    hideLoading();
+  }
+}
+
+// ---- Display results ----
+function showResults(data) {
+  // Answer
+  document.getElementById('answerText').textContent = data.answer;
+
+  // Timeline
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = '';
+  if (data.moments && data.moments.length > 0 && videoDuration > 0) {
+    data.moments.forEach((m, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'timeline-bar';
+      bar.style.left = (m.start / videoDuration * 100) + '%';
+      bar.style.width = Math.max((m.end - m.start) / videoDuration * 100, 0.5) + '%';
+      bar.style.background = MOMENT_COLORS[i % MOMENT_COLORS.length];
+      bar.style.opacity = 0.35 + m.score * 0.6;
+      bar.title = m.start.toFixed(1) + 's - ' + m.end.toFixed(1) + 's (' + (m.score * 100).toFixed(1) + '%)';
+      timeline.appendChild(bar);
+    });
+    timeline.style.display = 'block';
+  }
+
+  // Moments list
+  const list = document.getElementById('momentsList');
+  list.innerHTML = '';
+  document.getElementById('momentsLabel').textContent = 'Retrieved Moments (' + data.moments.length + ')';
+
+  data.moments.forEach((m, i) => {
+    const color = MOMENT_COLORS[i % MOMENT_COLORS.length];
+    const scoreColor = m.score > 0.8 ? '#4ade80' : m.score > 0.5 ? '#fbbf24' : '#7a7a8e';
+
+    const card = document.createElement('div');
+    card.className = 'moment-card';
+    card.onclick = () => seekTo(m.start);
+    card.onmouseenter = () => { card.style.borderColor = color; };
+    card.onmouseleave = () => { card.style.borderColor = '#2a2a3a'; };
+
+    card.innerHTML = `
+      <div class="moment-badge" style="background:${color}">${i + 1}</div>
+      <div class="moment-time">${m.start.toFixed(1)}s → ${m.end.toFixed(1)}s</div>
+      <div class="moment-score" style="color:${scoreColor}">${(m.score * 100).toFixed(1)}%</div>
+    `;
+    list.appendChild(card);
+  });
+
+  document.getElementById('results').style.display = 'block';
+}
+
+function seekTo(time) {
+  const player = document.getElementById('videoPlayer');
+  player.currentTime = time;
+  player.play();
+}
+
+// ---- UI helpers ----
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+function hideError() { document.getElementById('errorBox').style.display = 'none'; }
+function showLoading(msg) {
+  document.getElementById('loadingText').textContent = msg;
+  document.getElementById('loadingBox').style.display = 'flex';
+  document.getElementById('btnAsk').disabled = true;
+}
+function hideLoading() {
+  document.getElementById('loadingBox').style.display = 'none';
+  document.getElementById('btnAsk').disabled = false;
+}
+</script>
+</body>
+</html>
